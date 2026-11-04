@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>서줌 본인인증</title>
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:#F4F5FA;color:#141729;word-break:keep-all}
+  .wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+  h1{font-size:20px;margin:0 0 8px}
+  p{font-size:14px;color:#5B6180;line-height:1.6;margin:0}
+  .spin{width:36px;height:36px;border:4px solid #E3E6FF;border-top-color:#2234D4;border-radius:50%;animation:s 1s linear infinite;margin-bottom:18px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  button{margin-top:20px;border:0;background:#2234D4;color:#fff;font-weight:800;font-size:15px;border-radius:12px;padding:14px 22px}
+</style>
+<script src="https://cdn.portone.io/v2/browser-sdk.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="spin" id="spin"></div>
+  <h1 id="title">본인인증 창을 여는 중입니다</h1>
+  <p id="desc">잠시만 기다려 주십시오.</p>
+  <button id="retry" hidden>다시 시도</button>
+</div>
+<script>
+// 서줌 앱 전용 본인인증 페이지 (포트원 V2 · KG이니시스 통합인증)
+// 앱이 ?id=seojum-... 로 이 페이지를 열면 인증 창을 띄우고, 결과를 앱으로 돌려보냅니다.
+// 상점 아이디·채널 키는 공개용 값입니다. (비밀 키는 서버 함수에만 있습니다)
+var STORE_ID = 'store-539484f2-1ac2-4654-ab6c-dd44039211b9';
+var CHANNEL_KEY = 'channel-key-7d6bd2d2-5f44-4a48-93a6-6ee6fea7cce0';
+
+var q = new URLSearchParams(location.search);
+function send(result) {
+  if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(result));
+}
+function show(title, desc, retry) {
+  document.getElementById('spin').hidden = true;
+  document.getElementById('title').textContent = title;
+  document.getElementById('desc').textContent = desc;
+  document.getElementById('retry').hidden = !retry;
+}
+function done(id, code, message) {
+  if (code) {
+    show('본인인증을 완료하지 못했습니다', message || '다시 시도해 주십시오.', false);
+    send({ ok: false, id: id, message: message || '본인인증이 취소되었습니다.' });
+  } else {
+    show('본인인증이 완료되었습니다', '앱으로 돌아갑니다.', false);
+    send({ ok: true, id: id });
+  }
+}
+
+// 모바일: 인증 후 이 페이지로 돌아옴 (?identityVerificationId=...&code=...)
+if (q.get('identityVerificationId')) {
+  done(q.get('identityVerificationId'), q.get('code'), q.get('message'));
+} else {
+  var id = q.get('id') || '';
+  if (!/^seojum-[A-Za-z0-9-]{8,60}$/.test(id)) {
+    show('잘못된 접근입니다', '서줌 앱에서 본인인증을 진행해 주십시오.', false);
+  } else {
+    var start = function () {
+      PortOne.requestIdentityVerification({
+        storeId: STORE_ID,
+        identityVerificationId: id,
+        channelKey: CHANNEL_KEY,
+        redirectUrl: location.origin + location.pathname,
+      }).then(function (res) {
+        // PC 등 리디렉션 없이 끝난 경우
+        if (res) done(res.identityVerificationId || id, res.code, res.message);
+      }).catch(function (e) {
+        show('본인인증 창을 열지 못했습니다', String(e && e.message || e), true);
+        send({ ok: false, id: id, message: '본인인증 창을 열지 못했습니다.' });
+      });
+    };
+    document.getElementById('retry').onclick = function () { document.getElementById('retry').hidden = true; start(); };
+    start();
+  }
+}
+</script>
+</body>
+</html>
