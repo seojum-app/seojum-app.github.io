@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>서줌 매장 위치</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#141729;word-break:keep-all}
+  #wrap{display:flex;flex-direction:column;height:100%}
+  #bar{padding:10px 12px;background:#fff;border-bottom:1px solid #D8DCE8;display:flex;gap:8px}
+  #q{flex:1;font-size:15px;padding:11px 12px;border:1px solid #D8DCE8;border-radius:10px;outline:none}
+  #q:focus{border-color:#2234D4}
+  #go{border:0;background:#2234D4;color:#fff;font-weight:800;border-radius:10px;padding:0 16px;font-size:14px}
+  #list{max-height:38%;overflow:auto;background:#fff;border-bottom:1px solid #D8DCE8;display:none}
+  .it{padding:11px 14px;border-top:1px solid #EEF0F6}
+  .it b{display:block;font-size:14px}
+  .it em{font-style:normal;color:#2234D4;font-size:12px}
+  .it span{font-size:12px;color:#5B6180}
+  #map{flex:1;position:relative}
+  #hint{position:absolute;left:10px;right:10px;top:10px;z-index:3;background:rgba(20,23,41,.82);color:#fff;font-size:12px;border-radius:10px;padding:8px 10px;text-align:center}
+  #foot{padding:12px;background:#fff;border-top:1px solid #D8DCE8}
+  #sel{font-size:13px;color:#5B6180;margin-bottom:8px;min-height:18px}
+  #sel b{color:#141729}
+  #ok{width:100%;border:0;background:#2234D4;color:#fff;font-weight:800;font-size:15px;border-radius:12px;padding:14px}
+  #ok:disabled{background:#B7BCD6}
+  #err{padding:30px 20px;text-align:center;color:#5B6180;font-size:14px;line-height:1.6;display:none}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar"><input id="q" placeholder="매장 이름 또는 주소 (예: 신세계 센텀시티, 센텀남대로 35)" enterkeyhint="search"><button id="go">검색</button></div>
+  <div id="list"></div>
+  <div id="map"><div id="hint">매장 이름이나 주소로 검색하거나, 지도를 눌러 매장 입구를 표시해 주십시오.</div></div>
+  <div id="err"></div>
+  <div id="foot"><div id="sel">선택한 위치가 없습니다.</div><button id="ok" disabled>이 위치로 정하기</button></div>
+</div>
+<script>
+// 서줌 앱 전용: 의뢰 등록 때 매장 위치를 고르는 지도 (카카오맵)
+// 결과(매장명·주소·좌표·구)를 앱으로 돌려보냅니다. 이용자의 현재 위치는 사용하지 않습니다.
+var KAKAO_JS_KEY = '09bfd4318817e8e9033c9c3615d367be';
+var GU = {'중구':[35.1064,129.0323],'서구':[35.0979,129.0243],'동구':[35.1293,129.0454],'영도구':[35.0911,129.0679],'부산진구':[35.1629,129.0532],'동래구':[35.1964,129.0940],'남구':[35.1365,129.0843],'북구':[35.1973,128.9903],'해운대구':[35.1631,129.1636],'사하구':[35.1046,128.9748],'금정구':[35.2430,129.0922],'강서구':[35.2122,128.9806],'연제구':[35.1762,129.0799],'수영구':[35.1455,129.1131],'사상구':[35.1526,128.9910],'기장군':[35.2446,129.2222]};
+var qs = new URLSearchParams(location.search);
+var picked = null;
+function send(o){ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+function fail(msg){ document.getElementById('map').style.display='none'; var e=document.getElementById('err'); e.style.display='block'; e.textContent=msg; }
+
+var s = document.createElement('script');
+s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + KAKAO_JS_KEY + '&libraries=services&autoload=false';
+s.onerror = function(){ fail('지도를 불러오지 못했습니다. 인터넷 연결을 확인해 주십시오.'); };
+s.onload = function(){ kakao.maps.load(init); };
+document.head.appendChild(s);
+
+function init(){
+  var c = GU[qs.get('gu')] || [35.1796,129.0756];
+  var lat0 = parseFloat(qs.get('lat')), lng0 = parseFloat(qs.get('lng'));
+  var center = new kakao.maps.LatLng(isNaN(lat0) ? c[0] : lat0, isNaN(lng0) ? c[1] : lng0);
+  var map = new kakao.maps.Map(document.getElementById('map'), { center: center, level: isNaN(lat0) ? 5 : 3 });
+  var marker = new kakao.maps.Marker({ map: null });
+  var places = new kakao.maps.services.Places();
+  var geocoder = new kakao.maps.services.Geocoder();
+
+  function choose(lat, lng, name, addr){
+    var ll = new kakao.maps.LatLng(lat, lng);
+    marker.setPosition(ll); marker.setMap(map); map.panTo(ll);
+    // 부산 안인지, 어느 구인지 확인
+    geocoder.coord2RegionCode(lng, lat, function(r, st){
+      var reg = (st === kakao.maps.services.Status.OK) ? r.filter(function(x){return x.region_type==='B';})[0] || r[0] : null;
+      var gu = reg ? reg.region_2depth_name : '';
+      if (!reg || reg.region_1depth_name.indexOf('부산') !== 0) {
+        picked = null; document.getElementById('ok').disabled = true;
+        document.getElementById('sel').innerHTML = '<b>부산 밖 위치입니다.</b> 서줌은 부산에서만 이용할 수 있습니다.';
+        return;
+      }
+      var finish = function(a){
+        picked = { lat: lat, lng: lng, name: name || '', addr: a || '', gu: gu };
+        document.getElementById('sel').innerHTML = '<b>' + (name ? name + ' · ' : '') + gu + '</b><br>' + (a || '');
+        document.getElementById('ok').disabled = false;
+      };
+      if (addr) finish(addr);
+      else geocoder.coord2Address(lng, lat, function(a, st2){
+        finish(st2 === kakao.maps.services.Status.OK && a[0] ? (a[0].road_address ? a[0].road_address.address_name : a[0].address.address_name) : '');
+      });
+    });
+  }
+  if (!isNaN(lat0)) choose(lat0, lng0, qs.get('q') || '', '');
+
+  kakao.maps.event.addListener(map, 'click', function(e){
+    document.getElementById('list').style.display = 'none';
+    choose(e.latLng.getLat(), e.latLng.getLng(), '', '');
+  });
+
+  // 검색: 매장 이름(장소 검색)과 주소(도로명·지번)를 함께 찾아 부산 안의 결과만 보여 줌
+  function search(){
+    var q = document.getElementById('q').value.trim();
+    var list = document.getElementById('list');
+    if (!q) return;
+    var out = { place: null, addr: null };
+    var render = function(){
+      if (out.place === null || out.addr === null) return;
+      list.innerHTML = '';
+      var rows = [];
+      out.addr.forEach(function(a){
+        var full = a.road_address ? a.road_address.address_name : a.address_name;
+        if (full.indexOf('부산') === 0) rows.push({ tag: '주소', title: full, sub: a.road_address && a.address ? '지번 ' + a.address.address_name : '', lat: parseFloat(a.y), lng: parseFloat(a.x), name: '', addr: full });
+      });
+      out.place.forEach(function(d){
+        if ((d.address_name || '').indexOf('부산') === 0) rows.push({ tag: '매장', title: d.place_name, sub: d.road_address_name || d.address_name, lat: parseFloat(d.y), lng: parseFloat(d.x), name: d.place_name, addr: d.road_address_name || d.address_name });
+      });
+      if (!rows.length) { list.innerHTML = '<div class="it"><span>부산에서 검색 결과가 없습니다. 매장 이름이나 도로명 주소(예: 센텀남대로 35)로 다시 검색하거나, 지도를 직접 눌러 주십시오.</span></div>'; list.style.display = 'block'; return; }
+      rows.slice(0, 20).forEach(function(r){
+        var el = document.createElement('div'); el.className = 'it';
+        el.innerHTML = '<b><em></em> </b><span></span>';
+        el.querySelector('em').textContent = '[' + r.tag + ']';
+        el.firstChild.appendChild(document.createTextNode(r.title));
+        el.lastChild.textContent = r.sub;
+        el.onclick = function(){ list.style.display = 'none'; map.setLevel(3); choose(r.lat, r.lng, r.name, r.addr); };
+        list.appendChild(el);
+      });
+      list.style.display = 'block';
+    };
+    places.keywordSearch(q, function(data, st){ out.place = st === kakao.maps.services.Status.OK ? data : []; render(); },
+      { location: map.getCenter(), sort: kakao.maps.services.SortBy.ACCURACY });
+    geocoder.addressSearch(/부산/.test(q) ? q : '부산 ' + q, function(data, st){ out.addr = st === kakao.maps.services.Status.OK ? data : []; render(); });
+  }
+  document.getElementById('go').onclick = search;
+  document.getElementById('q').addEventListener('keydown', function(e){ if (e.key === 'Enter') search(); });
+  if (qs.get('q')) { document.getElementById('q').value = qs.get('q'); if (isNaN(lat0)) search(); }
+
+  document.getElementById('ok').onclick = function(){ if (picked) send({ ok: true, place: picked }); };
+}
+</script>
+</body>
+</html>
