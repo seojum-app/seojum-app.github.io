@@ -40,7 +40,9 @@
 // 서줌 앱 전용: 의뢰 등록 때 매장 위치를 고르는 지도 (카카오맵)
 // 결과(매장명·주소·좌표·구)를 앱으로 돌려보냅니다. 이용자의 현재 위치는 사용하지 않습니다.
 var KAKAO_JS_KEY = '09bfd4318817e8e9033c9c3615d367be';
-var GU = {'중구':[35.1064,129.0323],'서구':[35.0979,129.0243],'동구':[35.1293,129.0454],'영도구':[35.0911,129.0679],'부산진구':[35.1629,129.0532],'동래구':[35.1964,129.0940],'남구':[35.1365,129.0843],'북구':[35.1973,128.9903],'해운대구':[35.1631,129.1636],'사하구':[35.1046,128.9748],'금정구':[35.2430,129.0922],'강서구':[35.2122,128.9806],'연제구':[35.1762,129.0799],'수영구':[35.1455,129.1131],'사상구':[35.1526,128.9910],'기장군':[35.2446,129.2222]};
+var GU = {'중구':[35.1064,129.0323],'서구':[35.0979,129.0243],'동구':[35.1293,129.0454],'영도구':[35.0911,129.0679],'부산진구':[35.1629,129.0532],'동래구':[35.1964,129.0940],'남구':[35.1365,129.0843],'북구':[35.1973,128.9903],'해운대구':[35.1631,129.1636],'사하구':[35.1046,128.9748],'금정구':[35.2430,129.0922],'강서구':[35.2122,128.9806],'연제구':[35.1762,129.0799],'수영구':[35.1455,129.1131],'사상구':[35.1526,128.9910],'기장군':[35.2446,129.2222],'창원시 성산구':[35.1985,128.7027]};
+// [테스트 전용] 창원시 성산구 허용 (정식 출시 전 삭제)
+function okArea(addr){ return addr.indexOf('부산') === 0 || /^경(남|상남도) 창원시 성산구/.test(addr); }
 var qs = new URLSearchParams(location.search);
 var picked = null;
 function send(o){ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
@@ -68,7 +70,7 @@ function init(){
     geocoder.coord2RegionCode(lng, lat, function(r, st){
       var reg = (st === kakao.maps.services.Status.OK) ? r.filter(function(x){return x.region_type==='B';})[0] || r[0] : null;
       var gu = reg ? reg.region_2depth_name : '';
-      if (!reg || reg.region_1depth_name.indexOf('부산') !== 0) {
+      if (!reg || !okArea(reg.region_1depth_name + ' ' + reg.region_2depth_name)) {
         picked = null; document.getElementById('ok').disabled = true;
         document.getElementById('sel').innerHTML = '<b>부산 밖 위치입니다.</b> 서줌은 부산에서만 이용할 수 있습니다.';
         return;
@@ -103,10 +105,10 @@ function init(){
       var rows = [];
       out.addr.forEach(function(a){
         var full = a.road_address ? a.road_address.address_name : a.address_name;
-        if (full.indexOf('부산') === 0) rows.push({ tag: '주소', title: full, sub: a.road_address && a.address ? '지번 ' + a.address.address_name : '', lat: parseFloat(a.y), lng: parseFloat(a.x), name: '', addr: full });
+        if (okArea(full)) rows.push({ tag: '주소', title: full, sub: a.road_address && a.address ? '지번 ' + a.address.address_name : '', lat: parseFloat(a.y), lng: parseFloat(a.x), name: '', addr: full });
       });
       out.place.forEach(function(d){
-        if ((d.address_name || '').indexOf('부산') === 0) rows.push({ tag: '매장', title: d.place_name, sub: d.road_address_name || d.address_name, lat: parseFloat(d.y), lng: parseFloat(d.x), name: d.place_name, addr: d.road_address_name || d.address_name });
+        if (okArea(d.address_name || '')) rows.push({ tag: '매장', title: d.place_name, sub: d.road_address_name || d.address_name, lat: parseFloat(d.y), lng: parseFloat(d.x), name: d.place_name, addr: d.road_address_name || d.address_name });
       });
       if (!rows.length) { list.innerHTML = '<div class="it"><span>부산에서 검색 결과가 없습니다. 매장 이름이나 도로명 주소(예: 센텀남대로 35)로 다시 검색하거나, 지도를 직접 눌러 주십시오.</span></div>'; list.style.display = 'block'; return; }
       rows.slice(0, 20).forEach(function(r){
@@ -122,7 +124,7 @@ function init(){
     };
     places.keywordSearch(q, function(data, st){ out.place = st === kakao.maps.services.Status.OK ? data : []; render(); },
       { location: map.getCenter(), sort: kakao.maps.services.SortBy.ACCURACY });
-    geocoder.addressSearch(/부산/.test(q) ? q : '부산 ' + q, function(data, st){ out.addr = st === kakao.maps.services.Status.OK ? data : []; render(); });
+    geocoder.addressSearch(/부산|창원/.test(q) ? q : '부산 ' + q, function(data, st){ out.addr = st === kakao.maps.services.Status.OK ? data : []; render(); });
   }
   document.getElementById('go').onclick = search;
   document.getElementById('q').addEventListener('keydown', function(e){ if (e.key === 'Enter') search(); });
