@@ -55,6 +55,22 @@ s.onload = function(){ kakao.maps.load(init); };
 document.head.appendChild(s);
 
 function init(){
+  // 보기 전용 (인증 사진 화면): 매장 위치 핀만 표시, 검색·선택 숨김
+  if (qs.get('view') === '1') {
+    ['bar','list','foot','hint'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+    var vp = new kakao.maps.LatLng(parseFloat(qs.get('lat')), parseFloat(qs.get('lng')));
+    var vmap = new kakao.maps.Map(document.getElementById('map'), { center: vp, level: 3 });
+    new kakao.maps.Marker({ map: vmap, position: vp });
+    new kakao.maps.Circle({ map: vmap, center: vp, radius: 300, strokeWeight: 1, strokeColor: '#2234D4', strokeOpacity: 0.6, fillColor: '#2234D4', fillOpacity: 0.08 });
+    if (qs.get('q')) {
+      var iw = document.createElement('div');
+      iw.style.cssText = 'padding:4px 8px;font-size:12px;font-weight:700;white-space:nowrap;background:#fff;border:1px solid #2234D4;border-radius:8px;color:#141729';
+      iw.textContent = qs.get('q');
+      new kakao.maps.CustomOverlay({ map: vmap, position: vp, content: iw, yAnchor: 2.4 });
+    }
+    vmap.setLevel(4);
+    return;
+  }
   var c = GU[qs.get('gu')] || [35.1796,129.0756];
   var lat0 = parseFloat(qs.get('lat')), lng0 = parseFloat(qs.get('lng'));
   var center = new kakao.maps.LatLng(isNaN(lat0) ? c[0] : lat0, isNaN(lng0) ? c[1] : lng0);
