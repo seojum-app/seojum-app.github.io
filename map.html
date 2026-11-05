@@ -20,7 +20,8 @@
   .it span{font-size:12px;color:#5B6180}
   #map{flex:1;position:relative}
   #hint{position:absolute;left:10px;right:10px;top:10px;z-index:3;background:rgba(20,23,41,.82);color:#fff;font-size:12px;border-radius:10px;padding:8px 10px;text-align:center}
-  #foot{padding:12px;background:#fff;border-top:1px solid #D8DCE8}
+  /* 안드로이드 하단 내비게이션 바(뒤로·홈 버튼)에 '이 위치로 정하기'가 가리지 않도록 아래 여백 */
+  #foot{padding:12px 12px max(60px, calc(env(safe-area-inset-bottom) + 16px));background:#fff;border-top:1px solid #D8DCE8}
   #sel{font-size:13px;color:#5B6180;margin-bottom:8px;min-height:18px}
   #sel b{color:#141729}
   #ok{width:100%;border:0;background:#2234D4;color:#fff;font-weight:800;font-size:15px;border-radius:12px;padding:14px}
