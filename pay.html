@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>서줌 결제</title>
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:#F4F5FA;color:#141729;word-break:keep-all}
+  .wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+  h1{font-size:20px;margin:0 0 8px}
+  p{font-size:14px;color:#5B6180;line-height:1.6;margin:0}
+  .amt{font-size:26px;font-weight:800;color:#2234D4;margin:6px 0 2px}
+  .spin{width:36px;height:36px;border:4px solid #E3E6FF;border-top-color:#2234D4;border-radius:50%;animation:s 1s linear infinite;margin-bottom:18px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  button{margin-top:20px;border:0;background:#2234D4;color:#fff;font-weight:800;font-size:15px;border-radius:12px;padding:14px 22px}
+</style>
+<script src="https://cdn.portone.io/v2/browser-sdk.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="spin" id="spin"></div>
+  <h1 id="title">결제 창을 여는 중입니다</h1>
+  <div class="amt" id="amt"></div>
+  <p id="desc">잠시만 기다려 주세요.</p>
+  <button id="retry" hidden>다시 시도</button>
+</div>
+<script>
+// 서줌 앱 전용 결제 페이지 (포트원 V2) — 11/18 1단계(테스트 채널)
+// 앱이 ?id=seojum-pay-…&amount=…&name=… 로 열면 결제 창을 띄우고, 결과를 앱으로 돌려보냅니다.
+// 금액은 표시·요청용일 뿐이며, 실제 확인은 서버 함수(card-payment)가 포트원 조회로 다시 합니다.
+// 상점 아이디·채널 키는 공개용 값입니다. (비밀 키는 서버 함수에만 있습니다)
+var STORE_ID = 'store-539484f2-1ac2-4654-ab6c-dd44039211b9';
+var PAY_CHANNEL_KEY = 'channel-key-여기에-결제-테스트-채널-키'; // 포트원 콘솔 > 결제 연동 > 채널 관리 > 테스트 채널(토스페이먼츠) 키로 교체
+
+var q = new URLSearchParams(location.search);
+function send(result) { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(result)); }
+function show(title, desc, retry) {
+  document.getElementById('spin').hidden = true;
+  document.getElementById('title').textContent = title;
+  document.getElementById('desc').textContent = desc;
+  document.getElementById('retry').hidden = !retry;
+}
+function done(id, code, message) {
+  if (code) {
+    show('결제를 완료하지 못했습니다', message || '다시 시도해 주세요.', false);
+    send({ ok: false, id: id, message: message || '결제가 취소되었습니다.' });
+  } else {
+    show('결제가 끝났습니다', '앱으로 돌아가 결제를 확인합니다.', false);
+    send({ ok: true, id: id });
+  }
+}
+
+// 모바일: 결제 후 이 페이지로 돌아옴 (?paymentId=...&code=...&message=...)
+if (q.get('paymentId')) {
+  done(q.get('paymentId'), q.get('code'), q.get('message'));
+} else {
+  var id = q.get('id') || '';
+  var amount = parseInt(q.get('amount') || '0', 10);
+  var name = (q.get('name') || '서줌 대행비').slice(0, 40);
+  if (!/^seojum-pay-[0-9a-f]{32}$/.test(id) || !(amount > 0)) {
+    show('잘못된 접근입니다', '서줌 앱에서 결제를 진행해 주세요.', false);
+  } else {
+    document.getElementById('amt').textContent = amount.toLocaleString('ko-KR') + '원';
+    var start = function () {
+      PortOne.requestPayment({
+        storeId: STORE_ID,
+        channelKey: PAY_CHANNEL_KEY,
+        paymentId: id,
+        orderName: name,
+        totalAmount: amount,
+        currency: 'KRW',
+        payMethod: 'CARD',
+        redirectUrl: location.origin + location.pathname,
+      }).then(function (res) {
+        if (res) done(res.paymentId || id, res.code, res.message); // PC 등 리디렉션 없이 끝난 경우
+      }).catch(function (e) {
+        show('결제 창을 열지 못했습니다', String(e && e.message || e), true);
+        send({ ok: false, id: id, message: '결제 창을 열지 못했습니다.' });
+      });
+    };
+    document.getElementById('retry').onclick = function () { document.getElementById('retry').hidden = true; start(); };
+    start();
+  }
+}
+</script>
+</body>
+</html>
