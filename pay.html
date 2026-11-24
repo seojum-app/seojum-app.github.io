@@ -33,9 +33,10 @@
 // 확인한 뒤 승인합니다. 서버는 이 페이지(?paymentId=…)로 돌려보내고, 이 페이지가 결과를 앱에 전달합니다.
 // 클라이언트 키는 공개용 값입니다. (시크릿 키는 서버 함수에만 있습니다)
 //   테스트(샌드박스): S2_…  /  운영: R2_…  — 서버 함수의 NICEPAY_MODE와 반드시 같은 쪽을 쓸 것
-var CLIENT_ID = 'S2_8b7d87b3666b46079e6813a2db47da36';
-// var CLIENT_ID = 'R2_3773c69f8bac483db9dafdc2572e8a5e'; // 운영 전환 시
-var RETURN_URL = 'https://gtvbqzsqzhlwmtlslzko.supabase.co/functions/v1/card-payment?op=return';
+// 11/25: 클라이언트 키는 서버 함수(?op=config)가 알려 줌 — 테스트 S2_… / 운영 R2_… (Supabase 비밀 값 NICEPAY_MODE로 전환)
+var FN_URL = 'https://gtvbqzsqzhlwmtlslzko.supabase.co/functions/v1/card-payment';
+var RETURN_URL = FN_URL + '?op=return';
+var CLIENT_ID = '';
 
 var q = new URLSearchParams(location.search);
 function send(result) { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(result)); }
@@ -87,8 +88,18 @@ if (q.has('paymentId')) {
         send({ ok: false, id: id, message: '결제 창을 열지 못했습니다.' });
       }
     };
-    document.getElementById('retry').onclick = function () { document.getElementById('retry').hidden = true; start(); };
-    start();
+    document.getElementById('retry').onclick = function () { document.getElementById('retry').hidden = true; boot(); };
+    var boot = function () {
+      if (CLIENT_ID) return start();
+      fetch(FN_URL + '?op=config', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (c) {
+        if (!c || !/^[SR][12]_/.test(c.clientId || '')) throw new Error('결제 설정을 불러오지 못했습니다.');
+        CLIENT_ID = c.clientId; start();
+      }).catch(function (e) {
+        show('결제 창을 열지 못했습니다', String(e && e.message || e), true);
+        send({ ok: false, id: id, message: '결제 창을 열지 못했습니다.' });
+      });
+    };
+    boot();
   }
 }
 </script>
