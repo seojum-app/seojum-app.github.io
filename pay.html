@@ -23,6 +23,7 @@
   <h1 id="title">결제 창을 여는 중입니다</h1>
   <div class="amt" id="amt"></div>
   <p id="desc">잠시만 기다려 주세요.</p>
+  <p id="law" style="margin-top:14px;font-size:12.5px;max-width:360px">서주미가 현장에서 대기를 시작하면(명단 작성은 작성을 마치면) 서비스가 시작된 것이라 취소·환불(청약철회)이 제한돼요. 그 뒤 교대 시각에 오지 않아도 대행비는 환불되지 않아요. 이용 전 취소·서주미 미도착은 전액 환불돼요. <a href="https://seojum.kr/index.html#refund" style="color:#2234D4">환불 안내</a></p>
   <button id="retry" hidden>다시 시도</button>
 </div>
 <script>
@@ -40,6 +41,7 @@ var q = new URLSearchParams(location.search);
 function send(result) { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(result)); }
 function show(title, desc, retry) {
   document.getElementById('spin').hidden = true;
+  if (q.has('paymentId')) document.getElementById('law').hidden = true;
   document.getElementById('title').textContent = title;
   document.getElementById('desc').textContent = desc;
   document.getElementById('retry').hidden = !retry;
